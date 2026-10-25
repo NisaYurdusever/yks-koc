@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>YKS Koç</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#faf8fc;--card:#fff;--tx:#241b30;--mu:#6d6479;--ac:#5b2c83;--bd:#e4dcec;--r:#c0392b;--y:#c18a00;--g:#2e8b57}
+@media(prefers-color-scheme:dark){:root{--bg:#16111d;--card:#211a2b;--tx:#efe9f6;--mu:#a99bb8;--ac:#b794e0;--bd:#3a2e49}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,Arial,sans-serif}
+main{max-width:920px;margin:0 auto;padding:16px}h1{font-size:22px;margin:0 0 4px;color:var(--ac)}h2{font-size:16px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin:12px 0;overflow-x:auto}.mu{color:var(--mu);font-size:13px}
+button,.btn,select{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:7px 12px;cursor:pointer}
+.p{background:var(--ac)!important;color:#fff!important;border-color:var(--ac)!important}nav{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}nav .on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:flex;align-items:center;gap:8px;margin:5px 0}.row span:first-child{width:96px;flex:none}.row .s{width:150px;flex:none;font-size:12px;color:var(--mu)}
+.bar{flex:1;height:12px;background:var(--bd);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%}
+table{border-collapse:collapse;width:100%;min-width:520px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd)}th{font-size:12px;color:var(--mu)}
+pre{white-space:pre-wrap;font:inherit;margin:0}svg{width:100%;height:auto}
+</style></head><body><main>
+<h1>YKS Koç</h1>
+<div class="mu">Herhangi bir kurumun deneme karnesi PDF’ini yükle; konu bazlı doğru/yanlış/boş ve net takibi otomatik çıkar.</div>
+<div class="card"><label class="btn p">PDF yükle<input id="f" type="file" accept="application/pdf" multiple hidden></label>
+<select id="src"></select> <span id="msg" class="mu"></span></div>
+<nav id="nav"></nav><div id="v"></div></main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pc=(d,s)=>s?Math.round(100*d/s):0,nf=n=>(Math.round(n*100)/100).toString().replace('.',',');
+const col=p=>p<50?'var(--r)':p<75?'var(--y)':'var(--g)';
+let S={exams:[]},tab='panel',sel='',src='';
+const msg=t=>$('#msg').textContent=t;
+async function load(){S=await (await fetch('/api/data')).json();render()}
+const ex=()=>S.exams.filter(e=>!src||e.src===src);
+const tnet=t=>t.d-(t.y||0)/4;
+
+function agg(){
+  const T={};
+  ex().forEach((e,i)=>e.t.forEach(k=>{const key=k.ders+'|'+k.konu.toLowerCase();
+    const o=T[key]||(T[key]={ders:k.ders,konu:k.konu,ss:0,d:0,y:0,b:0,h:[]});
+    o.ss+=k.ss;o.d+=k.d;o.y+=k.y||0;o.b+=k.b||0;o.h[i]=pc(o.d,o.ss)}));
+  return Object.values(T).map(t=>({...t,p:pc(t.d,t.ss),k:t.ss-t.d,net:t.d-t.y/4,pr:(t.ss-t.d)*(1-t.d/t.ss)})).sort((a,b)=>b.pr-a.pr);
+}
+function netPts(){
+  return ex().flatMap(e=>e.nets.some(n=>n.net!=null)?e.nets.filter(n=>n.net!=null).map(n=>({x:(n.tarih||n.ad||'').slice(0,5),y:n.net})):
+    e.t.some(k=>k.y!=null)?[{x:e.src.slice(0,6),y:Math.round(e.t.reduce((a,k)=>a+tnet(k),0)*100)/100}]:[]);
+}
+function chart(pts,max){
+  const W=560,H=190,l=34,r=14,tp=12,b=34,n=pts.length;
+  const X=i=>n>1?l+i*(W-l-r)/(n-1):(W+l-r)/2,Y=v=>tp+(H-tp-b)*(1-v/max);
+  let s=`<svg viewBox="0 0 ${W} ${H}">`;
+  for(let g=0;g<=4;g++){const v=max*g/4;s+=`<line x1="${l}" x2="${W-r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--bd)"/><text x="${l-5}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="var(--mu)">${Math.round(v)}</text>`}
+  const q=pts.map((p,i)=>p.y==null?null:[X(i),Y(p.y),p]).filter(Boolean);
+  if(q.length>1)s+=`<polyline fill="none" stroke="var(--ac)" stroke-width="2.5" points="${q.map(a=>a[0]+','+a[1]).join(' ')}"/>`;
+  q.forEach(a=>s+=`<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="var(--ac)"/><text x="${a[0]}" y="${a[1]-8}" text-anchor="middle" font-size="10" fill="var(--tx)">${a[2].y}</text>`);
+  pts.forEach((p,i)=>s+=`<text x="${X(i)}" y="${H-14}" text-anchor="middle" font-size="9" fill="var(--mu)">${esc(p.x)}</text>`);
+  return s+'</svg>';
+}
+function plan(A){
+  const w=A.filter(t=>t.k>0).slice(0,12),g=['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+  const how=t=>t.p<40?'konu anlatımı + 40 soru':t.p<70?'30 soru + yanlış analizi':'15-20 soru tekrar';
+  return g.map((d,i)=>`${d}: ${w[i]?w[i].konu+' ('+w[i].ders+', %'+w[i].p+') – '+how(w[i]):'–'}`+(w[i+6]?`\n   + ${w[i+6].konu} (%${w[i+6].p}) – ${how(w[i+6])}`:'')).join('\n')+'\nPazar: 1 deneme + yanlış/boş analizi';
+}
+async function coach(){
+  const out=$('#ai'),A=agg(),sub=subjects(A);out.textContent='Hazırlanıyor…';
+  const prompt=`Sen deneyimli bir YKS koçusun. Türkçe, samimi ve kısa yaz. Veriler:
+Ders başarıları (D/Y/B, net): ${Object.entries(sub).map(([k,o])=>`${k} %${pc(o.d,o.ss)} (${o.d}/${o.y}/${o.b}, net ${nf(o.net)})`).join('; ')}.
+Deneme netleri: ${netPts().map(p=>p.y).join(', ')}.
+En zayıf konular: ${A.slice(0,15).map(t=>`${t.konu} [${t.ders}] D${t.d} Y${t.y} B${t.b}/${t.ss}`).join('; ')}.
+Ver: 1) güçlü/zayıf yön özeti (yanlış mı boş mu daha çok sorun, belirt), 2) Pazartesi-Pazar haftalık program (süre ve soru sayısıyla), 3) süre yönetimi ve boş/yanlış stratejisi için 2 öneri.`;
+  try{const r=await (await fetch('/api/coach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})})).json();out.textContent=r.text||r.error}
+  catch(e){out.textContent='Bağlantı hatası: '+e.message}
+}
+function subjects(A){const s={};A.forEach(t=>{const o=s[t.ders]||(s[t.ders]={ss:0,d:0,y:0,b:0,net:0});o.ss+=t.ss;o.d+=t.d;o.y+=t.y;o.b+=t.b;o.net+=t.net});return s}
+
+function render(){
+  const srcs=[...new Set(S.exams.map(e=>e.src))];
+  $('#src').innerHTML='<option value="">Tüm kurumlar</option>'+srcs.map(s=>`<option ${s===src?'selected':''}>${esc(s)}</option>`).join('');
+  $('#nav').innerHTML=[['panel','Panel'],['konu','Konu grafiği'],['prog','Program'],['kay','Karneler']].map(([k,t])=>`<button data-t="${k}" class="${tab==k?'on':''}">${t}</button>`).join('');
+  const v=$('#v');
+  if(!S.exams.length){v.innerHTML='<div class="card">Henüz veri yok. Bir karne PDF’i yükle.</div>';return}
+  const A=agg(),sub=subjects(A),np=netPts();
+  if(tab=='panel'){
+    v.innerHTML=`<div class="card"><h2>Ders başarıları</h2>${Object.entries(sub).map(([k,o])=>{const p=pc(o.d,o.ss);return`<div class="row"><span>${esc(k)}</span><div class="bar"><i style="width:${p}%;background:${col(p)}"></i></div><b>%${p}</b><span class="s">D${o.d} Y${o.y} B${o.b} · net ${nf(o.net)}</span></div>`}).join('')}</div>
+    ${np.length?`<div class="card"><h2>Net gidişi</h2>${chart(np,Math.max(40,Math.ceil(Math.max(...np.map(p=>p.y))/20)*20))}</div>`:''}
+    <div class="card"><h2>Öncelikli konular</h2><div class="mu">Öncelik = kaçan soru × (1 − başarı)</div><table><tr><th>Konu</th><th>Ders</th><th>D</th><th>Y</th><th>B</th><th>Başarı</th></tr>
+    ${A.filter(t=>t.k>0).slice(0,20).map(t=>`<tr><td>${esc(t.konu)}</td><td>${esc(t.ders)}</td><td>${t.d}</td><td>${t.y}</td><td>${t.b}</td><td style="color:${col(t.p)}"><b>%${t.p}</b></td></tr>`).join('')}</table></div>`;
+  }else if(tab=='konu'){
+    const t=A.find(x=>x.konu==sel)||A[0];sel=t.konu;
+    const pts=ex().map((e,i)=>({x:'K'+(i+1),y:t.h[i]??null}));
+    v.innerHTML=`<div class="card"><select id="sel">${[...A].sort((a,b)=>a.ders.localeCompare(b.ders,'tr')||a.konu.localeCompare(b.konu,'tr')).map(x=>`<option ${x.konu==sel?'selected':''} value="${esc(x.konu)}">${esc(x.ders)} – ${esc(x.konu)}</option>`).join('')}</select>
+    <h2 style="margin-top:12px">Kümülatif başarı %</h2>${chart(pts,100)}
+    <div class="mu">K1, K2… karneleri sırayla gösterir. Şu an: D${t.d} Y${t.y} B${t.b} / ${t.ss} soru (%${t.p}).</div></div>`;
+    $('#sel').onchange=e=>{sel=e.target.value;render()};
+  }else if(tab=='prog'){
+    v.innerHTML=`<div class="card"><h2>Otomatik haftalık program</h2><pre>${esc(plan(A))}</pre></div>
+    <div class="card"><h2>Yapay zekâ koç</h2><button class="p" id="aib">Analiz ve program iste</button><pre id="ai" style="margin-top:10px"></pre></div>`;
+    $('#aib').onclick=coach;
+  }else{
+    v.innerHTML=`<div class="card"><h2>Yüklenen karneler</h2><table><tr><th>Dosya</th><th>Kurum</th><th>Konu</th><th></th></tr>${S.exams.map(e=>`<tr><td>${esc(e.file)}</td><td>${esc(e.src)}</td><td>${e.t.length}</td><td><button data-del="${e.id}">Sil</button></td></tr>`).join('')}</table></div>`;
+  }
+}
+$('#nav').onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;render()}};
+$('#v').onclick=async e=>{const id=e.target.dataset.del;if(id&&confirm('Silinsin mi?')){await fetch('/api/exam/'+id,{method:'DELETE'});load()}};
+$('#src').onchange=e=>{src=e.target.value;render()};
+$('#f').onchange=async ev=>{
+  for(const f of ev.target.files){
+    msg(f.name+' okunuyor (1 dk sürebilir)…');
+    const b64=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f)});
+    try{const r=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,b64})});
+      const j=await r.json();if(!r.ok)throw new Error(j.error);msg(f.name+' eklendi.')}
+    catch(e){msg('Hata: '+e.message)}
+  }
+  ev.target.value='';load();
+};
+load();
+</script></body></html>
